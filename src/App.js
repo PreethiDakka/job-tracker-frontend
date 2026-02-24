@@ -14,9 +14,12 @@ const BASE_URL = "https://job-tracker-backend-ntvx.onrender.com";
 function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [jobs, setJobs] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
@@ -31,21 +34,54 @@ function App() {
     }
   }, []);
 
-  const handleLogin = async () => {
-  try {
-    const res = await axios.post(`${BASE_URL}/auth/login`, {
-      email,
-      password
-    });
+  const validateInputs = () => {
+    if (!email.endsWith("@gmail.com")) {
+      alert("Email must end with @gmail.com");
+      return false;
+    }
 
-    localStorage.setItem("token", res.data.token);
-    setIsLoggedIn(true);
-    fetchJobs(res.data.token);
+    const strongPasswordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{6,}$/;
 
-  } catch (error) {
-    alert("Invalid email or password");
-  }
-};
+    if (!strongPasswordRegex.test(password)) {
+      alert(
+        "Password must be at least 6 characters and include uppercase, lowercase, number and special character"
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleAuth = async () => {
+    if (!validateInputs()) return;
+
+    try {
+      if (isRegistering) {
+        await axios.post(`${BASE_URL}/auth/register`, {
+          name,
+          email,
+          password
+        });
+
+        alert("Registration successful! Please login.");
+        setIsRegistering(false);
+        return;
+      }
+
+      const res = await axios.post(`${BASE_URL}/auth/login`, {
+        email,
+        password
+      });
+
+      localStorage.setItem("token", res.data.token);
+      setIsLoggedIn(true);
+      fetchJobs(res.data.token);
+
+    } catch (error) {
+      alert(error.response?.data?.message || "Something went wrong");
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -55,11 +91,9 @@ function App() {
 
   const fetchJobs = async (token) => {
     setLoading(true);
-
     const res = await axios.get(`${BASE_URL}/jobs`, {
       headers: { Authorization: token }
     });
-
     setJobs(res.data);
     setLoading(false);
   };
@@ -81,24 +115,20 @@ function App() {
 
   const handleDeleteJob = async (id) => {
     const token = localStorage.getItem("token");
-
     await axios.delete(
       `${BASE_URL}/jobs/${id}`,
       { headers: { Authorization: token } }
     );
-
     fetchJobs(token);
   };
 
   const handleStatusChange = async (id, newStatus) => {
     const token = localStorage.getItem("token");
-
     await axios.put(
       `${BASE_URL}/jobs/${id}`,
       { status: newStatus },
       { headers: { Authorization: token } }
     );
-
     fetchJobs(token);
   };
 
@@ -113,23 +143,53 @@ function App() {
     return (
       <div style={styles.loginContainer}>
         <div style={styles.card}>
-          <h2>Login</h2>
+          <h2>{isRegistering ? "Sign Up" : "Login"}</h2>
+
+          {isRegistering && (
+            <input
+              style={styles.input}
+              placeholder="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          )}
+
           <input
             style={styles.input}
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <input
-            style={styles.input}
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button style={styles.primaryBtn} onClick={handleLogin}>
-            Login
+
+          <div style={{ position: "relative" }}>
+            <input
+              style={styles.input}
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={styles.showBtn}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          <button style={styles.primaryBtn} onClick={handleAuth}>
+            {isRegistering ? "Register" : "Login"}
           </button>
+
+          <p
+            style={{ marginTop: "10px", cursor: "pointer", color: "#3498db" }}
+            onClick={() => setIsRegistering(!isRegistering)}
+          >
+            {isRegistering
+              ? "Already have an account? Login"
+              : "Don't have an account? Sign Up"}
+          </p>
         </div>
       </div>
     );
@@ -145,7 +205,6 @@ function App() {
           </button>
         </div>
 
-        {/* Pie Chart */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -164,7 +223,6 @@ function App() {
           </ResponsiveContainer>
         </motion.div>
 
-        {/* Add Job */}
         <div style={styles.card}>
           <h3>Add Job</h3>
           <input
@@ -236,6 +294,12 @@ const styles = {
     margin: "0 auto",
     fontFamily: "Arial"
   },
+  loginContainer: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    height: "100vh"
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -252,7 +316,6 @@ const styles = {
   card: {
     background: "#fff",
     padding: "20px",
-    marginBottom: "20px",
     borderRadius: "10px",
     boxShadow: "0 4px 10px rgba(0,0,0,0.1)"
   },
@@ -270,13 +333,24 @@ const styles = {
     borderRadius: "5px",
     border: "1px solid #ccc"
   },
+  showBtn: {
+    position: "absolute",
+    right: "10px",
+    top: "8px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    color: "#3498db",
+    fontWeight: "bold"
+  },
   primaryBtn: {
     background: "#3498db",
     color: "#fff",
     padding: "10px",
     border: "none",
     borderRadius: "5px",
-    cursor: "pointer"
+    cursor: "pointer",
+    width: "100%"
   },
   deleteBtn: {
     background: "#e74c3c",
